@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host - Bingo 4x4</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .control-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        input, button, textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.call {
+            background: #2196F3;
+        }
+        button.reset {
+            background: #ff9800;
+        }
+        .words-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        .word-item {
+            padding: 8px;
+            text-align: center;
+            background: #e9ecef;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .word-item.called {
+            background: #4CAF50;
+            color: white;
+            font-weight: bold;
+        }
+        .status {
+            text-align: center;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .active-game {
+            background: #d4edda;
+            color: #155724;
+        }
+        .called-words {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .player-link {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 HOST - Bingo 4x4</h1>
+        
+        <div class="control-panel">
+            <h3>⚙️ Configuración del Juego</h3>
+            
+            <div>
+                <label><strong>📝 Lista de Palabras (una por línea):</strong></label>
+                <textarea id="wordsInput" rows="6" placeholder="Ejemplo:&#10;MANZANA&#10;PERRO&#10;CASA&#10;SOL...">AMOR
+LUZ
+SOL
+MAR
+CIELO
+FLOR
+AGUA
+FUEGO
+TIERRA
+AIRE
+GATO
+PERRO
+CASA
+ÁRBOL
+LIBRO
+MÚSICA
+BAILE
+CANTO
+JUEGO
+RISAS
+AMIGO
+FAMILIA
+ESCUELA
+TRABAJO
+VIAJE
+SUEÑO
+TIEMPO
+ESPACIO
+COLOR
+FORMA</textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                <button onclick="startGame()" class="call">🎲 Iniciar Juego</button>
+                <button onclick="resetGame()" class="reset">🔄 Reiniciar Todo</button>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <h3>📢 Control del Caller</h3>
+            <div id="gameStatus" class="status">Juego no iniciado</div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button onclick="callWord()" class="call">📢 Llamar Palabra</button>
+                <button onclick="callRandomWord()" class="call">🎲 Llamar Aleatoria</button>
+            </div>
+
+            <div class="words-grid" id="wordsContainer">
+                <!-- Las palabras aparecerán aquí -->
+            </div>
+        </div>
+
+        <div class="called-words">
+            <h3>✅ Palabras Llamadas: <span id="calledCount">0</span></h3>
+            <div id="calledWordsList"></div>
+        </div>
+
+        <div class="control-panel">
+            <h3>📱 Información para Jugadores</h3>
+            <p>Todos los jugadores usan el mismo link:</p>
+            <div class="player-link" id="playerLink">
+                http://TU_IP:8000/bingo_jugador.html
+            </div>
+            <button onclick="copyPlayerLink()">📋 Copiar Link Jugadores</button>
+        </div>
+    </div>
+
+    <script>
+        let allWords = [];
+        let calledWords = [];
+        let gameActive = false;
+
+        // Cargar palabras iniciales
+        function loadInitialWords() {
+            const textarea = document.getElementById('wordsInput');
+            allWords = textarea.value.split('\n')
+                .map(word => word.trim())
+                .filter(word => word.length > 0);
+            updateWordsDisplay();
+        }
+
+        // Actualizar display de palabras
+        function updateWordsDisplay() {
+            const container = document.getElementById('wordsContainer');
+            container.innerHTML = '';
+            
+            allWords.forEach(word => {
+                const wordElement = document.createElement('div');
+                wordElement.className = calledWords.includes(word) ? 'word-item called' : 'word-item';
+                wordElement.textContent = word;
+                wordElement.onclick = () => callSpecificWord(word);
+                container.appendChild(wordElement);
+            });
+            
+            document.getElementById('calledCount').textContent = calledWords.length;
+            updateCalledWordsList();
+        }
+
+        // Actualizar lista de palabras llamadas
+        function updateCalledWordsList() {
+            const container = document.getElementById('calledWordsList');
+            if (calledWords.length === 0) {
+                container.innerHTML = '<p style="color: #999; text-align: center;">No hay palabras llamadas todavía</p>';
+            } else {
+                container.innerHTML = calledWords.map(word => 
+                    `<span style="display: inline-block; background: #4CAF50; color: white; padding: 5px 10px; margin: 3px; border-radius: 15px; font-weight: bold;">${word}</span>`
+                ).join('');
+            }
+        }
+
+        // Iniciar juego
+        function startGame() {
+            const textarea = document.getElementById('wordsInput');
+            allWords = textarea.value.split('\n')
+                .map(word => word.trim())
+                .filter(word => word.length > 0);
+            
+            if (allWords.length < 16) {
+                alert('❌ Se necesitan al menos 16 palabras para el bingo 4x4');
+                return;
+            }
+            
+            calledWords = [];
+            gameActive = true;
+            document.getElementById('gameStatus').textContent = `🎮 Juego Activo - ${allWords.length} palabras cargadas`;
+            document.getElementById('gameStatus').className = 'status active-game';
+            updateWordsDisplay();
+            
+            alert('✅ Juego iniciado! Los jugadores pueden comenzar');
+        }
+
+        // Llamar palabra específica
+        function callSpecificWord(word) {
+            if (!gameActive) {
+                alert('❌ Inicia el juego primero');
+                return;
+            }
+            
+            if (calledWords.includes(word)) {
+                alert('⚠️ Esta palabra ya fue llamada');
+                return;
+            }
+            
+            calledWords.push(word);
+            updateWordsDisplay();
+            showWordNotification(word);
+        }
+
+        // Llamar palabra aleatoria
+        function callRandomWord() {
+            if (!gameActive) {
+                alert('❌ Inicia el juego primero');
+                return;
+            }
+            
+            const availableWords = allWords.filter(word => !calledWords.includes(word));
+            if (availableWords.length === 0) {
+                alert('🎉 ¡Todas las palabras han sido llamadas!');
+                return;
+            }
+            
+            const randomWord = availableWords[Math.floor(Math.random() * availableWords.length)];
+            calledWords.push(randomWord);
+            updateWordsDisplay();
+            showWordNotification(randomWord);
+        }
+
+        // Llamar palabra (alias para el botón)
+        function callWord() {
+            callRandomWord();
+        }
+
+        // Mostrar notificación de palabra llamada
+        function showWordNotification(word) {
+            // Crear notificación
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: #ffeb3b;
+                color: #333;
+                padding: 30px 40px;
+                border-radius: 15px;
+                font-weight: bold;
+                font-size: 24px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                z-index: 1000;
+                animation: popIn 0.5s ease-out;
+            `;
+            notification.textContent = `📢 ¡${word}!`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'popOut 0.5s ease-in';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 500);
+            }, 2000);
+        }
+
+        // Reiniciar juego
+        function resetGame() {
+            calledWords = [];
+            gameActive = false;
+            document.getElementById('gameStatus').textContent = 'Juego no iniciado';
+            document.getElementById('gameStatus').className = 'status';
+            updateWordsDisplay();
+        }
+
+        // Copiar link de jugadores
+        function copyPlayerLink() {
+            const link = window.location.href.replace('bingo_host.html', 'bingo_jugador.html');
+            navigator.clipboard.writeText(link).then(() => {
+                alert('✅ Link copiado: ' + link);
+            });
+        }
+
+        // Agregar estilos de animación
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes popIn {
+                from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+                to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+            @keyframes popOut {
+                from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+                to { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Inicializar
+        loadInitialWords();
+
+        // Actualizar link con IP real
+        function updatePlayerLink() {
+            const linkElement = document.getElementById('playerLink');
+            const currentUrl = window.location.href;
+            const playerUrl = currentUrl.replace('bingo_host.html', 'bingo_jugador.html');
+            linkElement.textContent = playerUrl;
+        }
+
+        updatePlayerLink();
+    </script>
+</body>
+</html>
